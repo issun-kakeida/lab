@@ -1,4 +1,4 @@
-#■error 再登録
+#■error 再登録 fatal: remote origin already exists.
 git remote rm origin
 git remote add origin https://github.com/issun-kakeida/lab.git
 git push -u origin master
