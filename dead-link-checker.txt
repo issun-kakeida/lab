@@ -1,0 +1,81 @@
+// チェック対象サイト
+/* MEMO
+href属性にドメインが含んでいる場合（//www.hogehoge.com）は404扱いになってしまうの要　改造
+href属性にjavascript が合った場合の対応追加
+new RegExp 文字列としてパターンを指定する場合には、正規表現で一般的に使う「\d」「\w」などの「\（バックスラッシュ）」はエスケープ処理と判断されてしまいます。
+*/
+//var siteURL = "https://www.11kaigofuku.com/";
+var siteURL = "https://www.mapmarketing.co.jp/";
+//var siteURL_reg = /https?:\/\/www\.11kaigofuku\.com/;
+var siteURL_not_protocol = /^\/\/www\.mapmarketing\.co\.jp\//;
+var domain = siteURL.match(/^https?:\/\/[^\/]+/, "gi");
+var deadLinkList = [];
+
+Logger.log(domain);
+function main() {
+  // 対象サイト内のリンク抽出
+  var checkUrlList = getLinks(siteURL);
+  
+  // デッドリンクチェック
+  for(var i=0;i<checkUrlList.length;i++){
+  // レスポンスコード200以外であればリストに追加
+  var code = getResponseCode(checkUrlList[i]);
+  if(code != 200)
+    deadLinkList.push(checkUrlList[i] + " [" + code + "]");
+  }
+  //Logger.log(deadLinkList);
+  // デッドリンクがあればメール通知
+  if(deadLinkList.length > 0)
+    doNotice(deadLinkList);
+}
+  
+function doNotice(deadLinkList){
+  var subject = "[GAS]-[deadlinkchecker] " + siteURL;
+  
+  var body = "サイト " + siteURL + " に" + deadLinkList.length + "件のデッドリンクがあります。\n";
+  for(var i=0;i<deadLinkList.length;i++){
+    body += "\n" + deadLinkList[i];
+  }
+  MailApp.sendEmail("s.kakeida@issun.com", subject, body)
+}
+
+function getResponseCode(url){
+  var response = UrlFetchApp.fetch(url, { muteHttpExceptions:true });
+  
+  Logger.log(url + ":" + response.getResponseCode());
+  return response.getResponseCode();
+}
+
+function getLinks(siteURL){
+  var response = UrlFetchApp.fetch(siteURL);
+  var html = response.getContentText();
+  var regexp = new RegExp("<a.*?href=\"(.*?)\".*?>(.*?)</a>", "gim");
+  
+  var array = [];
+  var match;
+  while((match = regexp.exec(html)) != null){
+    var url = match[1];
+   // //domain に対応
+  if(url.match(siteURL_not_protocol) != -1) {
+      url = url.replace(siteURL_not_protocol, '');
+  }
+  //絶対パスのハンドリング　＞　一度取る
+  /*if(url.match(siteURL_reg)) {
+      url = url.replace(siteURL_reg, '');
+  }*/
+      // javascript に対応
+  if(url.match(/javascript/i)) {
+      url = url.replace(/javascript:[a-zA-Z_\-]*\(\);?/i, '');
+  } 
+  if(/^(\/.*)/.test(url)){
+    url = url.replace(/^(\/.*)/, domain + "$1");
+  }
+  else if(!/^(http|https|ftp):\/\//.test(url)){
+    url = siteURL + url;
+  }
+ 
+  if(array.indexOf(url) == -1)
+    array.push(url);
+  }
+  return array;
+}
